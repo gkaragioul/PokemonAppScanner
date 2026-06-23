@@ -103,3 +103,18 @@ if ($sw -match '\?v=') { "WARNING: versioned path in sw.js" } else { "SW uses cl
 # Verify CACHE_NAME is not v4
 if ($sw -match "card-scout-v4") { "WARNING: old CACHE_NAME" } else { "CACHE_NAME updated — OK" }
 ```
+
+## Automated helper tests
+
+```powershell
+npm.cmd test
+node --check src\app.js
+```
+
+Expected:
+
+- [ ] Search planner prioritizes name + collector number, then number-only, then name-only.
+- [ ] `Pikachu 58`, `Pikachu 58/102`, and `58/102` produce useful API queries.
+- [ ] OCR cleanup removes card boilerplate without dropping the likely name.
+- [ ] Result ranking prefers exact name and collector-number matches.
+- [ ] Value formatting handles TCGplayer, Cardmarket, and missing prices.

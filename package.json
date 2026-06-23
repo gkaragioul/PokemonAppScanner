@@ -5,6 +5,7 @@
   "description": "Mobile-first Pokemon card scanner, value lookup, and PSA helper PWA.",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "start": "node tools/static-server.js",
     "dev": "node tools/static-server.js"
   }

@@ -1,3 +1,15 @@
+import {
+  buildSearchPlan,
+  getLikelyQueryFromOcr,
+  rankCardsForSearch,
+} from "./card-search.js";
+import {
+  formatMoney,
+  formatPrices,
+  getMarketPrice,
+  getRatingScore,
+} from "./value-providers.js";
+
 const API_BASE = "https://api.pokemontcg.io/v2/cards";
 
 const state = {
@@ -234,7 +246,7 @@ async function analyzeImage(options = {}) {
     if (!window.Tesseract) throw new Error("OCR unavailable");
     const result = await window.Tesseract.recognize(state.imageDataUrl, "eng");
     const text = result.data.text.replace(/\s+/g, " ").trim();
-    const query = getLikelyQuery(text);
+    const query = getLikelyQueryFromOcr(text);
     elements.scanText.textContent = text
       ? `OCR: ${text}`
       : "OCR did not find readable text. Try manual search.";
@@ -438,27 +450,6 @@ function updateGradeFromSliders() {
   updateRating();
 }
 
-function getLikelyQuery(text) {
-  const collector = text.match(/\b(\d{1,4})\s*\/\s*(\d{1,4})\b/);
-  const collectorStr = collector ? `${collector[1]}/${collector[2]}` : "";
-
-  let nameText = text;
-  if (collectorStr) {
-    nameText = nameText.replace(new RegExp(collectorStr.replace("/", "\\/"), "g"), " ");
-  }
-
-  const words = nameText.split(/\s+/).map((w) => w.trim()).filter((w) => w.length > 0);
-  const collectorParts = collector ? [collector[1], collector[2]] : [];
-  const meaningful = words.filter((w) => {
-    if (w.length <= 2) return false;
-    if (/^\d{1,3}$/.test(w) && collectorParts.includes(w)) return false;
-    return !/^(stage|basic|evolves|weakness|resistance|retreat|illus)$/i.test(w);
-  });
-
-  const name = meaningful.slice(0, 3).join(" ").trim();
-  return collectorStr ? (name ? `${name} ${collectorStr}` : collectorStr) : name;
-}
-
 let lastCards = [];
 
 async function searchCards(query) {
@@ -474,52 +465,19 @@ async function searchCards(query) {
   setStatus("Searching Pokemon TCG API...");
   elements.results.innerHTML = '<div class="grade-card"><p>Searching…</p></div>';
 
-  const collector = cleanQuery.match(/\b(\d{1,3})\s*\/\s*(\d{1,3})\b/);
-
-  let nameQuery = cleanQuery;
-  if (collector) {
-    nameQuery = nameQuery.replace(new RegExp(collector[0].replace("/", "\\/"), "g"), " ");
-  }
-
-  const tokens = nameQuery.split(/\s+/).filter(Boolean);
-  const numberTokens = tokens.filter((t) => /^\d{1,3}$/.test(t));
-  const nameTokens = tokens.filter((t) => !/^\d{1,3}$/.test(t));
-
-  let collectorNumber = collector ? collector[1] : null;
-  if (!collectorNumber && numberTokens.length === 1) {
-    collectorNumber = numberTokens[0];
-  }
-
-  const collectorParts = collector ? [collector[1], collector[2]] : [];
-  const filteredNameTokens = nameTokens.filter(
-    (t) => !(/^\d{1,3}$/.test(t) && collectorParts.includes(t))
-  );
-
-  function buildQuery(nameTerms, number) {
-    const parts = [];
-    if (nameTerms.length) parts.push(`name:"${nameTerms.join(" ")}*"`);
-    if (number) parts.push(`number:${number}`);
-    return parts.length ? parts.join(" ") : `name:"${cleanQuery}*"`;
-  }
-
-  const apiQuery = buildQuery(filteredNameTokens.slice(0, 4), collectorNumber);
-
   try {
-    let cards = await fetchCards(apiQuery);
+    const searchPlan = buildSearchPlan(cleanQuery);
+    let cards = [];
 
-    if (!cards.length && filteredNameTokens.length && collectorNumber) {
-      const nameFallback = buildQuery(filteredNameTokens.slice(0, 4), null);
-      cards = await fetchCards(nameFallback);
+    for (const plan of searchPlan) {
+      cards = await fetchCards(plan.apiQuery);
+      if (cards.length) break;
     }
 
-    if (!cards.length && collectorNumber) {
-      const numFallback = buildQuery([], collectorNumber);
-      cards = await fetchCards(numFallback);
-    }
-
-    renderResults(cards);
+    renderResults(rankCardsForSearch(cards, cleanQuery));
   } catch {
     elements.results.innerHTML = '<div class="grade-card"><h2>Search failed</h2><p>Check your connection or try a simpler name like "Charizard".</p></div>';
+    setStatus("Search failed. Check your connection or try a simpler card name.");
   }
 }
 
@@ -590,43 +548,10 @@ function selectCard(card) {
   }
 }
 
-function getMarketPrice(card) {
-  const prices = card.tcgplayer?.prices || {};
-  const variants = Object.values(prices);
-  const market = variants.map((variant) => variant.market || variant.mid || variant.low).filter(Boolean);
-  return market.length ? Math.max(...market) : null;
-}
-
-function formatPrices(card) {
-  const parts = [];
-  const prices = card.tcgplayer?.prices || {};
-  Object.entries(prices).forEach(([variant, values]) => {
-    const market = values.market || values.mid || values.low;
-    if (market) parts.push(`${labelVariant(variant)} ${formatMoney(market)}`);
-  });
-  if (card.cardmarket?.prices?.averageSellPrice) {
-    parts.push(`Cardmarket avg ${formatMoney(card.cardmarket.prices.averageSellPrice, "EUR")}`);
-  }
-  return parts.length ? parts.join("<br />") : "No live price on Pokemon TCG API";
-}
-
-function labelVariant(value) {
-  return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function formatMoney(value, currency = "USD") {
-  if (!value) return "-";
-  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
-}
-
 function updateRating() {
-  const price = state.selectedCard ? getMarketPrice(state.selectedCard) || 0 : 0;
   const grade = getGradeFromSliders();
-  const rarity = state.selectedCard?.rarity || "";
-  let score = Math.min(50, Math.round(price / 3));
-  score += grade * 4;
-  if (/rare|secret|illustration|hyper|ultra/i.test(rarity)) score += 10;
-  elements.ratingValue.textContent = state.selectedCard ? `${Math.min(100, score)}/100` : "-";
+  const score = getRatingScore(state.selectedCard, grade);
+  elements.ratingValue.textContent = score === null ? "-" : `${score}/100`;
 }
 
 function setStatus(message) {
