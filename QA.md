@@ -47,6 +47,7 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 
 - [ ] Service worker registered (`Application > Service Workers` in DevTools).
 - [ ] **Install button** appears in the top bar (Chrome prompts may also fire on desktop).
+- [ ] Service worker cache contains `src/app.js`, `src/card-search.js`, `src/image-processing.js`, and `src/value-providers.js`.
 - [ ] Disable browser HTTP cache (`Network > Disable cache`), reload — app shell still renders with full CSS and JS.
 - [ ] Go offline (DevTools `Network > Offline`), reload — the styled shell loads; a red "Offline" badge appears in the scan ribbon.
 - [ ] While offline, search shows *"You are offline"* message.

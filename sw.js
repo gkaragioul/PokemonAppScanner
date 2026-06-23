@@ -1,9 +1,12 @@
-const CACHE_NAME = "card-scout-v6";
+const CACHE_NAME = "card-scout-v8";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./src/app.js",
+  "./src/card-search.js",
+  "./src/image-processing.js",
+  "./src/value-providers.js",
   "./manifest.webmanifest",
   "./assets/icon.svg",
 ];
@@ -12,13 +15,14 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
+    ).then(() => self.clients.claim())
   );
 });
 

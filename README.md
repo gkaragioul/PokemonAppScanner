@@ -39,7 +39,7 @@ requires HTTPS or localhost. See [docs/deployment/railway.md](./docs/deployment/
 After the first visit (service worker installs cached assets):
 
 - Full app shell renders: header, scan panel, search, grading, PSA tabs, status strip.
-- Styling and local JavaScript execute without a network.
+- Styling and all local JavaScript modules execute without a network.
 - Grading sliders update grade and rating in real time.
 - PSA cert URL builder works (opens in new tab when back online).
 
