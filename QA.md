@@ -56,7 +56,10 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 
 - [ ] **Camera** button requests camera permission.
 - [ ] **Upload** opens a file picker.
+- [ ] Uploaded photos show a captured preview and enable **Retake**.
+- [ ] **Retake** returns to live camera when a stream exists, or the empty upload state otherwise.
 - [ ] **Analyze** with a card photo runs OCR (if online) and condition estimation.
+- [ ] Large phone photos are resized before OCR; the browser stays responsive.
 - [ ] If Tesseract CDN is blocked (offline), OCR gracefully reports: *"Tesseract OCR is not available offline."*
 - [ ] Condition sliders update after analysis.
 

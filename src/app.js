@@ -1,16 +1,5 @@
-import {
-  buildSearchPlan,
-  getLikelyQueryFromOcr,
-  rankCardsForSearch,
-} from "./card-search.js";
-import {
-  formatMoney,
-  formatPrices,
-  getMarketPrice,
-  getRatingScore,
-} from "./value-providers.js";
-
-const API_BASE = "https://api.pokemontcg.io/v2/cards";
+import { buildSearchPlan, getLikelyQueryFromOcr, rankCardsForSearch, API_BASE } from "./card-search.js";
+import { getMarketPrice, formatPrices, formatMoney, labelVariant } from "./value-providers.js";
 
 const state = {
   imageDataUrl: "",
@@ -465,20 +454,29 @@ async function searchCards(query) {
   setStatus("Searching Pokemon TCG API...");
   elements.results.innerHTML = '<div class="grade-card"><p>Searching…</p></div>';
 
-  try {
-    const searchPlan = buildSearchPlan(cleanQuery);
-    let cards = [];
-
-    for (const plan of searchPlan) {
-      cards = await fetchCards(plan.apiQuery);
-      if (cards.length) break;
-    }
-
-    renderResults(rankCardsForSearch(cards, cleanQuery));
-  } catch {
-    elements.results.innerHTML = '<div class="grade-card"><h2>Search failed</h2><p>Check your connection or try a simpler name like "Charizard".</p></div>';
-    setStatus("Search failed. Check your connection or try a simpler card name.");
+  const plan = buildSearchPlan(cleanQuery);
+  if (!plan.length) {
+    elements.results.innerHTML = '<div class="grade-card"><h2>No cards found</h2><p>Try a card name or collector number like "Charizard" or "58/102".</p></div>';
+    setStatus("Could not build a search query from that input.");
+    return;
   }
+
+  let cards = [];
+
+  for (const step of plan) {
+    if (cards.length) break;
+    try {
+      cards = await fetchCards(step.apiQuery);
+    } catch {
+      continue;
+    }
+  }
+
+  if (cards.length) {
+    cards = rankCardsForSearch(cards, cleanQuery);
+  }
+
+  renderResults(cards);
 }
 
 async function fetchCards(apiQuery) {
@@ -549,9 +547,13 @@ function selectCard(card) {
 }
 
 function updateRating() {
+  const price = state.selectedCard ? getMarketPrice(state.selectedCard) || 0 : 0;
   const grade = getGradeFromSliders();
-  const score = getRatingScore(state.selectedCard, grade);
-  elements.ratingValue.textContent = score === null ? "-" : `${score}/100`;
+  const rarity = state.selectedCard?.rarity || "";
+  let score = Math.min(50, Math.round(price / 3));
+  score += grade * 4;
+  if (/rare|secret|illustration|hyper|ultra/i.test(rarity)) score += 10;
+  elements.ratingValue.textContent = state.selectedCard ? `${Math.min(100, score)}/100` : "-";
 }
 
 function setStatus(message) {

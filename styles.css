@@ -270,7 +270,7 @@ h2 {
 .toolbar,
 .search-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 10px;
 }
@@ -290,6 +290,10 @@ h2 {
 
 .toolbar button:nth-child(3) {
   background: linear-gradient(135deg, var(--red), #a8122a);
+}
+
+.toolbar button:nth-child(4) {
+  background: linear-gradient(135deg, #4b5563, #1f2937);
 }
 
 .search-panel {
@@ -638,6 +642,12 @@ h2 {
       transform: translateY(210px);
       opacity: 1;
     }
+  }
+}
+
+@media (max-width: 520px) {
+  .toolbar {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
