@@ -9,6 +9,9 @@ const ASSETS = [
   "./src/value-providers.js",
   "./manifest.webmanifest",
   "./assets/icon.svg",
+  "./assets/apple-touch-icon.png",
+  "./assets/icon-192.png",
+  "./assets/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

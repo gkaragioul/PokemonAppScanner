@@ -10,6 +10,9 @@ test("service worker caches every local app module needed by index.html", () => 
     "./src/card-search.js",
     "./src/image-processing.js",
     "./src/value-providers.js",
+    "./assets/apple-touch-icon.png",
+    "./assets/icon-192.png",
+    "./assets/icon-512.png",
   ]) {
     assert.match(sw, new RegExp(path.replace(/[./-]/g, "\\$&")));
   }

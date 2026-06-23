@@ -77,6 +77,10 @@ input[type="file"] {
   display: none;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .shell {
   position: relative;
   width: min(100%, 700px);
