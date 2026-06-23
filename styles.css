@@ -453,16 +453,61 @@ h2 {
   border-radius: 50%;
 }
 
-.result-card img {
+.card-image-wrapper {
   position: relative;
-  z-index: 1;
   width: 98px;
   aspect-ratio: 63 / 88;
+  flex: 0 0 auto;
+}
+
+.card-image-wrapper img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border: 4px solid #ffcb05;
   border-radius: 8px;
   background: var(--soft);
   box-shadow: 0 8px 18px rgba(20, 32, 51, 0.18);
+}
+
+.card-fallback {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px;
+  border: 4px solid #ffcb05;
+  border-radius: 8px;
+  background: var(--soft);
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.card-image-wrapper img.failed + .card-fallback {
+  display: flex;
+}
+
+.result-card.selected {
+  background:
+    linear-gradient(120deg, rgba(2, 169, 161, 0.18), transparent 34%),
+    #fff;
+  border-color: var(--teal);
+}
+
+.offline .scan-ribbon::after {
+  content: "Offline";
+  padding: 2px 8px;
+  margin-left: auto;
+  background: var(--ink);
+  border-radius: 4px;
+  font-size: 0.7rem;
 }
 
 .result-card h2 {

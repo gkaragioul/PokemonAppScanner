@@ -1,4 +1,4 @@
-const CACHE_NAME = "card-scout-v4";
+const CACHE_NAME = "card-scout-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,18 +9,59 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+    )
   );
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+
+  if (url.pathname === "/favicon.ico") {
+    event.respondWith(
+      caches.match("./assets/icon.svg").then((cached) => {
+        if (cached) return cached;
+        return fetch("./assets/icon.svg");
+      })
+    );
+    return;
+  }
+
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).catch(() => {
+          if (request.mode === "navigate") {
+            return caches.match("./index.html");
+          }
+          return new Response("", { status: 503 });
+        });
+      })
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).catch(() => cached))
+    fetch(request).catch(() => {
+      if (url.href.includes("api.pokemontcg.io")) {
+        return new Response(
+          JSON.stringify({ error: "offline", message: "Search needs an internet connection." }),
+          { status: 503, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      return new Response("", { status: 503 });
+    })
   );
 });

@@ -235,13 +235,19 @@ async function analyzeImage(options = {}) {
     const result = await window.Tesseract.recognize(state.imageDataUrl, "eng");
     const text = result.data.text.replace(/\s+/g, " ").trim();
     const query = getLikelyQuery(text);
-    elements.scanText.textContent = text ? `OCR: ${text}` : "OCR did not find readable text. Try manual search.";
+    elements.scanText.textContent = text
+      ? `OCR: ${text}`
+      : "OCR did not find readable text. Try manual search.";
     if (query) {
       elements.searchInput.value = query;
       await searchCards(query);
     }
-  } catch {
-    setStatus("Condition estimate is ready. OCR could not load, so use manual search.");
+  } catch (err) {
+    if (err.message === "OCR unavailable") {
+      setStatus("Tesseract OCR is not available offline. Condition estimate is ready. Use manual search.");
+    } else {
+      setStatus("Condition estimate is ready. OCR could not process this image. Try manual search.");
+    }
   } finally {
     state.isAnalyzing = false;
     elements.scanButton.disabled = false;
@@ -415,9 +421,13 @@ function applyCondition(condition) {
   updateGradeFromSliders();
 }
 
-function updateGradeFromSliders() {
+function getGradeFromSliders() {
   const values = ["cornersRange", "edgesRange", "surfaceRange", "centeringRange"].map((id) => Number($(id).value));
-  const grade = Math.max(1, Math.min(10, Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)));
+  return Math.max(1, Math.min(10, Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)));
+}
+
+function updateGradeFromSliders() {
+  const grade = getGradeFromSliders();
   elements.gradeEstimate.textContent = `PSA ${grade}?`;
   elements.gradeTitle.textContent = `Estimated PSA-style grade: ${grade}`;
   elements.gradeNotes.textContent = grade >= 9
@@ -429,55 +439,116 @@ function updateGradeFromSliders() {
 }
 
 function getLikelyQuery(text) {
-  const collector = text.match(/\b(?:[A-Z]{1,4})?\s?(\d{1,3})\s?\/\s?(\d{1,3})\b/);
-  const cleanWords = text
-    .split(/[^A-Za-z0-9' -]+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 2 && !/^(stage|basic|evolves|weakness|resistance|retreat|illus)$/i.test(part));
-  const name = cleanWords[0] || "";
-  return collector ? `${name} ${collector[1]}/${collector[2]}`.trim() : name;
+  const collector = text.match(/\b(\d{1,4})\s*\/\s*(\d{1,4})\b/);
+  const collectorStr = collector ? `${collector[1]}/${collector[2]}` : "";
+
+  let nameText = text;
+  if (collectorStr) {
+    nameText = nameText.replace(new RegExp(collectorStr.replace("/", "\\/"), "g"), " ");
+  }
+
+  const words = nameText.split(/\s+/).map((w) => w.trim()).filter((w) => w.length > 0);
+  const collectorParts = collector ? [collector[1], collector[2]] : [];
+  const meaningful = words.filter((w) => {
+    if (w.length <= 2) return false;
+    if (/^\d{1,3}$/.test(w) && collectorParts.includes(w)) return false;
+    return !/^(stage|basic|evolves|weakness|resistance|retreat|illus)$/i.test(w);
+  });
+
+  const name = meaningful.slice(0, 3).join(" ").trim();
+  return collectorStr ? (name ? `${name} ${collectorStr}` : collectorStr) : name;
 }
+
+let lastCards = [];
 
 async function searchCards(query) {
   const cleanQuery = query.trim();
   if (!cleanQuery) return;
 
+  if (!navigator.onLine) {
+    elements.results.innerHTML = '<div class="grade-card"><h2>You are offline</h2><p>Card search requires an internet connection. Come back when you are online.</p></div>';
+    setStatus("Offline — search unavailable.");
+    return;
+  }
+
   setStatus("Searching Pokemon TCG API...");
-  elements.results.innerHTML = "";
+  elements.results.innerHTML = '<div class="grade-card"><p>Searching…</p></div>';
 
-  const terms = cleanQuery
-    .replace(/[^\w\s/'-]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  const collector = cleanQuery.match(/(\d{1,3})\s?\/\s?(\d{1,3})/);
-  const nameTerms = terms.filter((term) => !/^\d{1,3}$/.test(term)).slice(0, 4);
-  const queryParts = [];
+  const collector = cleanQuery.match(/\b(\d{1,3})\s*\/\s*(\d{1,3})\b/);
 
-  if (nameTerms.length) queryParts.push(`name:"${nameTerms.join(" ")}*"`);
-  if (collector) queryParts.push(`number:${collector[1]}`);
-  const apiQuery = queryParts.length ? queryParts.join(" ") : `name:"${cleanQuery}*"`;
+  let nameQuery = cleanQuery;
+  if (collector) {
+    nameQuery = nameQuery.replace(new RegExp(collector[0].replace("/", "\\/"), "g"), " ");
+  }
+
+  const tokens = nameQuery.split(/\s+/).filter(Boolean);
+  const numberTokens = tokens.filter((t) => /^\d{1,3}$/.test(t));
+  const nameTokens = tokens.filter((t) => !/^\d{1,3}$/.test(t));
+
+  let collectorNumber = collector ? collector[1] : null;
+  if (!collectorNumber && numberTokens.length === 1) {
+    collectorNumber = numberTokens[0];
+  }
+
+  const collectorParts = collector ? [collector[1], collector[2]] : [];
+  const filteredNameTokens = nameTokens.filter(
+    (t) => !(/^\d{1,3}$/.test(t) && collectorParts.includes(t))
+  );
+
+  function buildQuery(nameTerms, number) {
+    const parts = [];
+    if (nameTerms.length) parts.push(`name:"${nameTerms.join(" ")}*"`);
+    if (number) parts.push(`number:${number}`);
+    return parts.length ? parts.join(" ") : `name:"${cleanQuery}*"`;
+  }
+
+  const apiQuery = buildQuery(filteredNameTokens.slice(0, 4), collectorNumber);
 
   try {
-    const response = await fetch(`${API_BASE}?q=${encodeURIComponent(apiQuery)}&pageSize=12&orderBy=-set.releaseDate`);
-    if (!response.ok) throw new Error("Search failed");
-    const payload = await response.json();
-    renderResults(payload.data || []);
+    let cards = await fetchCards(apiQuery);
+
+    if (!cards.length && filteredNameTokens.length && collectorNumber) {
+      const nameFallback = buildQuery(filteredNameTokens.slice(0, 4), null);
+      cards = await fetchCards(nameFallback);
+    }
+
+    if (!cards.length && collectorNumber) {
+      const numFallback = buildQuery([], collectorNumber);
+      cards = await fetchCards(numFallback);
+    }
+
+    renderResults(cards);
   } catch {
     elements.results.innerHTML = '<div class="grade-card"><h2>Search failed</h2><p>Check your connection or try a simpler name like "Charizard".</p></div>';
   }
 }
 
+async function fetchCards(apiQuery) {
+  const response = await fetch(`${API_BASE}?q=${encodeURIComponent(apiQuery)}&pageSize=12&orderBy=-set.releaseDate`);
+  if (!response.ok) throw new Error("Search failed");
+  const payload = await response.json();
+  return payload.data || [];
+}
+
 function renderResults(cards) {
   if (!cards.length) {
-    elements.results.innerHTML = '<div class="grade-card"><h2>No cards found</h2><p>Try the Pokemon name plus collector number, like "Pikachu 25".</p></div>';
+    elements.results.innerHTML = '<div class="grade-card"><h2>No cards found</h2><p>Try the Pokemon name plus collector number, like "Pikachu 25" or "Pikachu 58/102". You can also search just a set name.</p></div>';
+    setStatus("No matching cards found. Try a different search.");
     return;
   }
 
+  lastCards = cards;
+
   elements.results.innerHTML = cards.map((card, index) => {
-    const price = getMarketPrice(card);
     return `
-      <article class="result-card">
-        <img src="${card.images?.small || ""}" alt="${card.name}" loading="lazy" />
+      <article class="result-card${card === state.selectedCard ? " selected" : ""}">
+        <div class="card-image-wrapper">
+          <img src="${card.images?.small || ""}" alt="${card.name}" loading="lazy" data-card-index="${index}" />
+          <div class="card-fallback">
+            <span>${card.name}</span>
+            <span>${card.set?.name || ""}</span>
+          </div>
+        </div>
         <div>
           <h2>${card.name}</h2>
           <div class="meta">${card.set?.name || "Unknown set"} &middot; #${card.number || "-"} &middot; ${card.rarity || "Unknown rarity"}</div>
@@ -488,17 +559,35 @@ function renderResults(cards) {
     `;
   }).join("");
 
-  document.querySelectorAll("[data-card-index]").forEach((button) => {
-    button.addEventListener("click", () => selectCard(cards[Number(button.dataset.cardIndex)]));
+  elements.results.querySelectorAll("img[data-card-index]").forEach((img) => {
+    img.addEventListener("error", () => {
+      img.classList.add("failed");
+      const fallback = img.nextElementSibling;
+      if (fallback && fallback.classList.contains("card-fallback")) {
+        fallback.style.display = "flex";
+      }
+    });
   });
 
-  selectCard(cards.find((card) => getMarketPrice(card)) || cards[0]);
+  document.querySelectorAll("[data-card-index]").forEach((button) => {
+    button.addEventListener("click", () => selectCard(lastCards[Number(button.dataset.cardIndex)]));
+  });
+
+  const firstPriced = cards.find((c) => getMarketPrice(c));
+  selectCard(firstPriced || cards[0]);
 }
 
 function selectCard(card) {
   state.selectedCard = card;
   elements.rawValue.textContent = formatMoney(getMarketPrice(card));
   updateRating();
+
+  document.querySelectorAll(".result-card").forEach((el) => el.classList.remove("selected"));
+  const idx = lastCards.indexOf(card);
+  if (idx >= 0) {
+    const all = elements.results.querySelectorAll(".result-card");
+    if (all[idx]) all[idx].classList.add("selected");
+  }
 }
 
 function getMarketPrice(card) {
@@ -532,8 +621,7 @@ function formatMoney(value, currency = "USD") {
 
 function updateRating() {
   const price = state.selectedCard ? getMarketPrice(state.selectedCard) || 0 : 0;
-  const gradeText = elements.gradeEstimate.textContent.match(/\d+/)?.[0];
-  const grade = gradeText ? Number(gradeText) : 0;
+  const grade = getGradeFromSliders();
   const rarity = state.selectedCard?.rarity || "";
   let score = Math.min(50, Math.round(price / 3));
   score += grade * 4;
@@ -544,3 +632,12 @@ function updateRating() {
 function setStatus(message) {
   elements.scanText.textContent = message;
 }
+
+window.addEventListener("online", () => {
+  setStatus("Back online. Search and OCR are available again.");
+  document.documentElement.classList.remove("offline");
+});
+window.addEventListener("offline", () => {
+  setStatus("You are offline. Manual search and OCR require internet.");
+  document.documentElement.classList.add("offline");
+});
