@@ -1,0 +1,43 @@
+# Dependencies and package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Local server and deploy tooling
+.railway/
+.vercel/
+dist/
+build/
+coverage/
+
+# Downloaded research, datasets, and generated ML assets
+downloads/
+datasets/
+data/raw/
+data/cache/
+models/
+weights/
+*.onnx
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+*.parquet
+*.sqlite
+*.db
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
