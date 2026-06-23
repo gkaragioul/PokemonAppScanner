@@ -7,6 +7,17 @@ export function getMarketPrice(card) {
   return market.length ? Math.max(...market) : null;
 }
 
+export function getValueSummary(card) {
+  const amount = getMarketPrice(card);
+  return {
+    amount,
+    formatted: formatMoney(amount),
+    source: amount
+      ? "Pokemon TCG API / TCGplayer market fields"
+      : "No live raw value available from Pokemon TCG API",
+  };
+}
+
 export function formatPrices(card) {
   const parts = [];
   const prices = card?.tcgplayer?.prices || {};

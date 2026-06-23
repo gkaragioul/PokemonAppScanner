@@ -5,6 +5,7 @@ import {
   formatMoney,
   formatPrices,
   getMarketPrice,
+  getValueSummary,
 } from "../src/value-providers.js";
 
 test("getMarketPrice chooses the highest available TCGplayer market-like value", () => {
@@ -34,4 +35,16 @@ test("formatPrices includes TCGplayer and Cardmarket values", () => {
 
 test("formatMoney handles missing values gracefully", () => {
   assert.equal(formatMoney(null), "-");
+});
+
+test("getValueSummary reports display value and source", () => {
+  const card = {
+    tcgplayer: { prices: { normal: { market: 12 } } },
+  };
+
+  assert.deepEqual(getValueSummary(card), {
+    amount: 12,
+    formatted: "$12.00",
+    source: "Pokemon TCG API / TCGplayer market fields",
+  });
 });

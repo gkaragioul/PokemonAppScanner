@@ -59,6 +59,8 @@ If you go offline, a red "Offline" badge appears in the scan ribbon.
 - Paid graded-value API (optional): [PriceCharting API](https://www.pricecharting.com/api-documentation). Not integrated; add a token if needed.
 - Image URLs from the API may occasionally return blanks. The app shows a text placeholder when that happens.
 
+See [docs/data/value-sources.md](./docs/data/value-sources.md) for the value-source policy.
+
 ## Important grading note
 
 The app cannot produce an official PSA grade. PSA grades require physical inspection and authentication. The in-app grade is only a personal estimate from a photo plus your manual slider input.

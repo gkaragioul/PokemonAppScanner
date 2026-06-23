@@ -1,5 +1,17 @@
-import { buildSearchPlan, getLikelyQueryFromOcr, rankCardsForSearch, API_BASE } from "./card-search.js";
-import { getMarketPrice, formatPrices, formatMoney, labelVariant } from "./value-providers.js";
+import {
+  buildSearchPlan,
+  getLikelyQueryFromOcr,
+  rankCardsForSearch,
+} from "./card-search.js";
+import { fitWithinBox } from "./image-processing.js";
+import {
+  formatPrices,
+  getMarketPrice,
+  getRatingScore,
+  getValueSummary,
+} from "./value-providers.js";
+
+const API_BASE = "https://api.pokemontcg.io/v2/cards";
 
 const state = {
   imageDataUrl: "",
@@ -21,6 +33,7 @@ const icons = {
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
   external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +51,7 @@ const elements = {
   scanButton: $("scanButton"),
   searchInput: $("searchInput"),
   searchButton: $("searchButton"),
+  retakeButton: $("retakeButton"),
   results: $("results"),
   scanText: $("scanText"),
   gradeEstimate: $("gradeEstimate"),
@@ -121,6 +135,7 @@ function showLiveCamera() {
   elements.emptyPreview.hidden = true;
   elements.cameraButton.innerHTML = `${icons.camera} Live`;
   elements.scanButton.disabled = false;
+  elements.retakeButton.disabled = true;
   startAutoScan();
 }
 
@@ -143,9 +158,11 @@ elements.fileInput.addEventListener("change", async (event) => {
   if (!file) return;
   const dataUrl = await readFileAsDataUrl(file);
   setPreview(dataUrl);
+  setStatus("Photo loaded. Tap Analyze when the card name and number are visible.");
 });
 
 elements.scanButton.addEventListener("click", analyzeImage);
+elements.retakeButton.addEventListener("click", resetCapture);
 elements.searchButton.addEventListener("click", () => searchCards(elements.searchInput.value));
 elements.searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") searchCards(elements.searchInput.value);
@@ -210,6 +227,26 @@ function setPreview(dataUrl, options = {}) {
   elements.camera.hidden = true;
   elements.emptyPreview.hidden = true;
   elements.scanButton.disabled = false;
+  elements.retakeButton.disabled = false;
+}
+
+function resetCapture() {
+  state.imageDataUrl = "";
+  elements.capturePreview.removeAttribute("src");
+  elements.capturePreview.hidden = true;
+  elements.capturePreview.setAttribute("aria-hidden", "true");
+  elements.scanButton.disabled = !state.cameraStream;
+  elements.retakeButton.disabled = true;
+
+  if (state.cameraStream) {
+    showLiveCamera();
+    setStatus("Camera is live again. Hold the card steady in bright light.");
+    return;
+  }
+
+  elements.emptyPreview.hidden = false;
+  elements.fileInput.value = "";
+  setStatus("Ready for another photo. Use Camera or Upload.");
 }
 
 async function analyzeImage(options = {}) {
@@ -228,12 +265,14 @@ async function analyzeImage(options = {}) {
       return;
     }
 
+    setStatus("Preparing photo for OCR and condition clues...");
+    const analysisDataUrl = await preprocessImage(state.imageDataUrl);
     setStatus("Analyzing photo for text and condition clues...");
-    const condition = await estimateCondition(state.imageDataUrl);
+    const condition = await estimateCondition(analysisDataUrl);
     applyCondition(condition);
 
     if (!window.Tesseract) throw new Error("OCR unavailable");
-    const result = await window.Tesseract.recognize(state.imageDataUrl, "eng");
+    const result = await window.Tesseract.recognize(analysisDataUrl, "eng");
     const text = result.data.text.replace(/\s+/g, " ").trim();
     const query = getLikelyQueryFromOcr(text);
     elements.scanText.textContent = text
@@ -256,6 +295,20 @@ async function analyzeImage(options = {}) {
       elements.autoScanState.textContent = "Watching for card";
     }
   }
+}
+
+async function preprocessImage(dataUrl) {
+  const image = await loadImage(dataUrl);
+  const canvas = elements.canvas;
+  const size = fitWithinBox(image.width, image.height, 1400);
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.save();
+  context.filter = "contrast(1.08) brightness(1.04)";
+  context.drawImage(image, 0, 0, size.width, size.height);
+  context.restore();
+  return canvas.toDataURL("image/jpeg", 0.86);
 }
 
 async function checkForCardInCamera() {
@@ -454,29 +507,20 @@ async function searchCards(query) {
   setStatus("Searching Pokemon TCG API...");
   elements.results.innerHTML = '<div class="grade-card"><p>Searching…</p></div>';
 
-  const plan = buildSearchPlan(cleanQuery);
-  if (!plan.length) {
-    elements.results.innerHTML = '<div class="grade-card"><h2>No cards found</h2><p>Try a card name or collector number like "Charizard" or "58/102".</p></div>';
-    setStatus("Could not build a search query from that input.");
-    return;
-  }
+  try {
+    const searchPlan = buildSearchPlan(cleanQuery);
+    let cards = [];
 
-  let cards = [];
-
-  for (const step of plan) {
-    if (cards.length) break;
-    try {
-      cards = await fetchCards(step.apiQuery);
-    } catch {
-      continue;
+    for (const plan of searchPlan) {
+      cards = await fetchCards(plan.apiQuery);
+      if (cards.length) break;
     }
-  }
 
-  if (cards.length) {
-    cards = rankCardsForSearch(cards, cleanQuery);
+    renderResults(rankCardsForSearch(cards, cleanQuery));
+  } catch {
+    elements.results.innerHTML = '<div class="grade-card"><h2>Search failed</h2><p>Check your connection or try a simpler name like "Charizard".</p></div>';
+    setStatus("Search failed. Check your connection or try a simpler card name.");
   }
-
-  renderResults(cards);
 }
 
 async function fetchCards(apiQuery) {
@@ -535,7 +579,9 @@ function renderResults(cards) {
 
 function selectCard(card) {
   state.selectedCard = card;
-  elements.rawValue.textContent = formatMoney(getMarketPrice(card));
+  const value = getValueSummary(card);
+  elements.rawValue.textContent = value.formatted;
+  elements.rawValue.title = value.source;
   updateRating();
 
   document.querySelectorAll(".result-card").forEach((el) => el.classList.remove("selected"));
@@ -547,13 +593,9 @@ function selectCard(card) {
 }
 
 function updateRating() {
-  const price = state.selectedCard ? getMarketPrice(state.selectedCard) || 0 : 0;
   const grade = getGradeFromSliders();
-  const rarity = state.selectedCard?.rarity || "";
-  let score = Math.min(50, Math.round(price / 3));
-  score += grade * 4;
-  if (/rare|secret|illustration|hyper|ultra/i.test(rarity)) score += 10;
-  elements.ratingValue.textContent = state.selectedCard ? `${Math.min(100, score)}/100` : "-";
+  const score = getRatingScore(state.selectedCard, grade);
+  elements.ratingValue.textContent = score === null ? "-" : `${score}/100`;
 }
 
 function setStatus(message) {
