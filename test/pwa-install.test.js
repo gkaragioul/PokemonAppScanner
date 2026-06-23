@@ -20,4 +20,5 @@ test("manifest includes PNG install icons alongside the SVG", () => {
 
 test("hidden scanner media stays hidden even with preview media styles", () => {
   assert.equal(css.includes("[hidden] {\n  display: none !important;\n}"), true);
+  assert.equal(css.includes(".preview video[hidden],\n.preview img[hidden] {\n  display: none !important;\n}"), true);
 });

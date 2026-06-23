@@ -249,6 +249,11 @@ h2 {
   display: block;
 }
 
+.preview video[hidden],
+.preview img[hidden] {
+  display: none !important;
+}
+
 .empty-preview {
   position: absolute;
   inset: 0;
