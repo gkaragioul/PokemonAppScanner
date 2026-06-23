@@ -17,10 +17,22 @@ Any static web server works:
 ```powershell
 python -m http.server 4173
 # or
-npm run dev
+npm.cmd run dev
 ```
 
 Open `http://localhost:4173`. Camera requires `localhost` or HTTPS.
+
+## Deploy on Railway
+
+Railway can host the app as a small static Node service:
+
+```powershell
+npm.cmd start
+```
+
+When connected to GitHub, Railway will install Node dependencies and run
+`npm start`. Use the generated HTTPS Railway URL on the phone; camera access
+requires HTTPS or localhost. See [docs/deployment/railway.md](./docs/deployment/railway.md).
 
 ## What works offline
 

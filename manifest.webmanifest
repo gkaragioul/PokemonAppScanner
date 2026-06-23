@@ -3,6 +3,7 @@
   "short_name": "Card Scout",
   "description": "Scan Pokemon cards, estimate condition, check values, and verify PSA certs.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7fb",
   "theme_color": "#152238",

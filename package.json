@@ -3,8 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "description": "Mobile-first Pokemon card scanner, value lookup, and PSA helper PWA.",
+  "type": "module",
   "scripts": {
-    "start": "npx serve .",
-    "dev": "npx serve ."
+    "start": "node tools/static-server.js",
+    "dev": "node tools/static-server.js"
   }
 }
