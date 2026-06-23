@@ -1,0 +1,10 @@
+{
+  "name": "pokemon-card-scout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile-first Pokemon card scanner, value lookup, and PSA helper PWA.",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve ."
+  }
+}

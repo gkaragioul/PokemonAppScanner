@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#152238" />
+    <meta name="description" content="Scan Pokemon cards, identify them, estimate condition, check raw values, and open PSA cert lookup." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css?v=2" />
+    <title>Card Scout</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="pokeball-mark" aria-hidden="true"></div>
+          <p class="eyebrow">Personal Pokemon TCG scanner</p>
+          <h1>Card Scout</h1>
+        </div>
+        <button class="icon-button" id="installButton" type="button" title="Install app" hidden>
+          <span data-icon="download"></span>
+        </button>
+      </header>
+
+      <section class="scan-panel">
+        <div class="scan-ribbon">
+          <span>Live card scanner</span>
+          <strong id="autoScanState">Auto scan ready</strong>
+        </div>
+        <div class="preview" id="preview">
+          <div class="scan-corners" aria-hidden="true"></div>
+          <video id="camera" playsinline autoplay muted hidden></video>
+          <img id="capturePreview" alt="Captured card" aria-hidden="true" hidden />
+          <div class="empty-preview" id="emptyPreview">
+            <span data-icon="camera"></span>
+            <strong>Scan or upload a card</strong>
+            <span>Front of card works best in bright, even light.</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <button id="cameraButton" type="button">
+            <span data-icon="camera"></span>
+            Camera
+          </button>
+          <label class="button-label">
+            <span data-icon="image"></span>
+            Upload
+            <input id="fileInput" type="file" accept="image/*" capture="environment" />
+          </label>
+          <button id="scanButton" type="button" disabled>
+            <span data-icon="scan"></span>
+            Analyze
+          </button>
+        </div>
+      </section>
+
+      <section class="search-panel">
+        <label for="searchInput">Card search</label>
+        <div class="search-row">
+          <input id="searchInput" type="search" placeholder="Name, set, or collector number" autocomplete="off" />
+          <button id="searchButton" type="button">
+            <span data-icon="search"></span>
+          </button>
+        </div>
+        <p class="hint" id="scanText">OCR text will appear here after analysis.</p>
+      </section>
+
+      <section class="status-strip" id="statusStrip">
+        <div>
+          <span class="metric-label">Likely grade</span>
+          <strong id="gradeEstimate">Not scanned</strong>
+        </div>
+        <div>
+          <span class="metric-label">Raw value</span>
+          <strong id="rawValue">-</strong>
+        </div>
+        <div>
+          <span class="metric-label">Rating</span>
+          <strong id="ratingValue">-</strong>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="App sections">
+        <button class="tab active" data-tab="matches" type="button">Matches</button>
+        <button class="tab" data-tab="grading" type="button">Grading</button>
+        <button class="tab" data-tab="psa" type="button">PSA</button>
+      </nav>
+
+      <section class="tab-panel active" id="matchesPanel">
+        <div class="results" id="results"></div>
+      </section>
+
+      <section class="tab-panel" id="gradingPanel">
+        <div class="grading-grid">
+          <label>
+            Corners
+            <input id="cornersRange" type="range" min="1" max="10" value="7" />
+          </label>
+          <label>
+            Edges
+            <input id="edgesRange" type="range" min="1" max="10" value="7" />
+          </label>
+          <label>
+            Surface
+            <input id="surfaceRange" type="range" min="1" max="10" value="7" />
+          </label>
+          <label>
+            Centering
+            <input id="centeringRange" type="range" min="1" max="10" value="7" />
+          </label>
+        </div>
+        <div class="grade-card">
+          <h2 id="gradeTitle">Estimated PSA-style grade: -</h2>
+          <p id="gradeNotes">Use the sliders after looking at whitening, scratches, dents, print lines, and centering. This is only a personal estimate, not a PSA result.</p>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="psaPanel">
+        <div class="psa-box">
+          <div class="slab-art" aria-hidden="true">
+            <span>PSA</span>
+            <div></div>
+          </div>
+          <label for="certInput">PSA certification number</label>
+          <div class="search-row">
+            <input id="certInput" inputmode="numeric" placeholder="Example: 12345678" />
+            <button id="psaLookupButton" type="button">
+              <span data-icon="external"></span>
+            </button>
+          </div>
+          <p class="hint">Official verification opens on PSA. Use it for already graded slabs, QR codes, and cert numbers.</p>
+        </div>
+        <div class="source-list">
+          <h2>Data sources</h2>
+          <a href="https://docs.pokemontcg.io/" target="_blank" rel="noreferrer">Pokemon TCG API</a>
+          <a href="https://www.psacard.com/publicapi/documentation" target="_blank" rel="noreferrer">PSA public API documentation</a>
+          <a href="https://www.pricecharting.com/api-documentation" target="_blank" rel="noreferrer">PriceCharting API for paid graded values</a>
+        </div>
+      </section>
+    </main>
+
+    <canvas id="analysisCanvas" hidden></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script type="module" src="./src/app.js?v=5"></script>
+  </body>
+</html>

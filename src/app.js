@@ -1,0 +1,546 @@
+const API_BASE = "https://api.pokemontcg.io/v2/cards";
+
+const state = {
+  imageDataUrl: "",
+  selectedCard: null,
+  deferredInstallPrompt: null,
+  cameraStream: null,
+  isAnalyzing: false,
+  autoScanEnabled: true,
+  autoScanTimer: 0,
+  lastAutoScanAt: 0,
+  stableCardFrames: 0,
+  previousFrameSignature: 0,
+};
+
+const icons = {
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>',
+  scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+  external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+};
+
+const $ = (id) => document.getElementById(id);
+
+document.querySelectorAll("[data-icon]").forEach((node) => {
+  node.innerHTML = icons[node.dataset.icon] || "";
+});
+
+const elements = {
+  camera: $("camera"),
+  cameraButton: $("cameraButton"),
+  capturePreview: $("capturePreview"),
+  emptyPreview: $("emptyPreview"),
+  fileInput: $("fileInput"),
+  scanButton: $("scanButton"),
+  searchInput: $("searchInput"),
+  searchButton: $("searchButton"),
+  results: $("results"),
+  scanText: $("scanText"),
+  gradeEstimate: $("gradeEstimate"),
+  rawValue: $("rawValue"),
+  ratingValue: $("ratingValue"),
+  gradeTitle: $("gradeTitle"),
+  gradeNotes: $("gradeNotes"),
+  installButton: $("installButton"),
+  certInput: $("certInput"),
+  psaLookupButton: $("psaLookupButton"),
+  canvas: $("analysisCanvas"),
+  autoScanState: $("autoScanState"),
+};
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  state.deferredInstallPrompt = event;
+  elements.installButton.hidden = false;
+});
+
+elements.installButton.addEventListener("click", async () => {
+  if (!state.deferredInstallPrompt) return;
+  state.deferredInstallPrompt.prompt();
+  await state.deferredInstallPrompt.userChoice;
+  state.deferredInstallPrompt = null;
+  elements.installButton.hidden = true;
+});
+
+elements.cameraButton.addEventListener("click", async () => {
+  if (state.cameraStream) {
+    showLiveCamera();
+    return;
+  }
+
+  await startCamera();
+});
+
+async function startCamera() {
+  try {
+    const stream = await getCameraStream();
+    state.cameraStream = stream;
+    elements.camera.srcObject = stream;
+    showLiveCamera();
+    setStatus("Camera is live. Hold the card in the frame, then tap Analyze.");
+  } catch {
+    setStatus("Camera permission was blocked or no webcam was found. Upload a card photo instead.");
+  }
+}
+
+async function getCameraStream() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Camera API unavailable");
+  }
+
+  const cameraOptions = [
+    { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+    { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+    { video: true, audio: false },
+  ];
+
+  let lastError;
+  for (const options of cameraOptions) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(options);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function showLiveCamera() {
+  state.imageDataUrl = "";
+  elements.camera.hidden = false;
+  elements.capturePreview.hidden = true;
+  elements.capturePreview.setAttribute("aria-hidden", "true");
+  elements.emptyPreview.hidden = true;
+  elements.cameraButton.innerHTML = `${icons.camera} Live`;
+  elements.scanButton.disabled = false;
+  startAutoScan();
+}
+
+function startAutoScan() {
+  stopAutoScan();
+  if (!state.autoScanEnabled) return;
+  elements.autoScanState.textContent = "Watching for card";
+  state.autoScanTimer = window.setInterval(checkForCardInCamera, 850);
+}
+
+function stopAutoScan() {
+  if (state.autoScanTimer) {
+    window.clearInterval(state.autoScanTimer);
+    state.autoScanTimer = 0;
+  }
+}
+
+elements.fileInput.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const dataUrl = await readFileAsDataUrl(file);
+  setPreview(dataUrl);
+});
+
+elements.scanButton.addEventListener("click", analyzeImage);
+elements.searchButton.addEventListener("click", () => searchCards(elements.searchInput.value));
+elements.searchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") searchCards(elements.searchInput.value);
+});
+
+document.querySelectorAll(".tab").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".tab, .tab-panel").forEach((node) => node.classList.remove("active"));
+    button.classList.add("active");
+    $(`${button.dataset.tab}Panel`).classList.add("active");
+  });
+});
+
+["cornersRange", "edgesRange", "surfaceRange", "centeringRange"].forEach((id) => {
+  $(id).addEventListener("input", updateGradeFromSliders);
+});
+
+elements.psaLookupButton.addEventListener("click", () => {
+  const cert = elements.certInput.value.replace(/\D/g, "");
+  const url = cert ? `https://www.psacard.com/cert/${cert}` : "https://www.psacard.com/cert/";
+  window.open(url, "_blank", "noopener,noreferrer");
+});
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function captureFromCamera(options = {}) {
+  const video = elements.camera;
+  if (!video.srcObject) return "";
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    await new Promise((resolve) => {
+      video.addEventListener("loadeddata", resolve, { once: true });
+    });
+  }
+
+  const canvas = elements.canvas;
+  canvas.width = video.videoWidth || 900;
+  canvas.height = video.videoHeight || 1200;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+  setPreview(dataUrl, options);
+  return dataUrl;
+}
+
+function setPreview(dataUrl, options = {}) {
+  state.imageDataUrl = dataUrl;
+  if (options.keepCameraLive) {
+    return;
+  }
+
+  stopAutoScan();
+  elements.capturePreview.src = dataUrl;
+  elements.capturePreview.hidden = false;
+  elements.capturePreview.setAttribute("aria-hidden", "false");
+  elements.camera.hidden = true;
+  elements.emptyPreview.hidden = true;
+  elements.scanButton.disabled = false;
+}
+
+async function analyzeImage(options = {}) {
+  if (state.isAnalyzing) return;
+  state.isAnalyzing = true;
+  elements.scanButton.disabled = true;
+
+  if (elements.camera.srcObject && !elements.camera.hidden) {
+    setStatus(options.auto ? "Card detected. Auto-analyzing..." : "Captured webcam frame. Analyzing card...");
+    await captureFromCamera({ keepCameraLive: Boolean(options.auto) });
+  }
+
+  try {
+    if (!state.imageDataUrl) {
+      setStatus("Start the camera or upload a card photo first.");
+      return;
+    }
+
+    setStatus("Analyzing photo for text and condition clues...");
+    const condition = await estimateCondition(state.imageDataUrl);
+    applyCondition(condition);
+
+    if (!window.Tesseract) throw new Error("OCR unavailable");
+    const result = await window.Tesseract.recognize(state.imageDataUrl, "eng");
+    const text = result.data.text.replace(/\s+/g, " ").trim();
+    const query = getLikelyQuery(text);
+    elements.scanText.textContent = text ? `OCR: ${text}` : "OCR did not find readable text. Try manual search.";
+    if (query) {
+      elements.searchInput.value = query;
+      await searchCards(query);
+    }
+  } catch {
+    setStatus("Condition estimate is ready. OCR could not load, so use manual search.");
+  } finally {
+    state.isAnalyzing = false;
+    elements.scanButton.disabled = false;
+    if (state.cameraStream && !elements.camera.hidden) {
+      elements.autoScanState.textContent = "Watching for card";
+    }
+  }
+}
+
+async function checkForCardInCamera() {
+  if (state.isAnalyzing || !state.cameraStream || elements.camera.hidden) return;
+  if (Date.now() - state.lastAutoScanAt < 8000) return;
+  if (elements.camera.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+
+  const detection = detectCardCandidate(elements.camera);
+  if (!detection.found) {
+    state.stableCardFrames = 0;
+    state.previousFrameSignature = detection.signature;
+    elements.autoScanState.textContent = "Show a card";
+    return;
+  }
+
+  const movement = Math.abs(detection.signature - state.previousFrameSignature);
+  state.previousFrameSignature = detection.signature;
+  state.stableCardFrames = movement < 18 ? state.stableCardFrames + 1 : 1;
+  elements.autoScanState.textContent = state.stableCardFrames >= 2 ? "Card locked" : "Hold steady";
+
+  if (state.stableCardFrames >= 2) {
+    state.lastAutoScanAt = Date.now();
+    state.stableCardFrames = 0;
+    await analyzeImage({ auto: true });
+  }
+}
+
+function detectCardCandidate(video) {
+  const canvas = elements.canvas;
+  const width = 180;
+  const height = 120;
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(video, 0, 0, width, height);
+  const { data } = context.getImageData(0, 0, width, height);
+  const gray = new Uint8Array(width * height);
+  let total = 0;
+
+  for (let index = 0, pixel = 0; index < data.length; index += 4, pixel++) {
+    const value = Math.round(data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114);
+    gray[pixel] = value;
+    total += value;
+  }
+
+  const average = total / gray.length;
+  let edgePixels = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = 0;
+  let maxY = 0;
+  let signature = 0;
+
+  for (let y = 2; y < height - 2; y += 2) {
+    for (let x = 2; x < width - 2; x += 2) {
+      const pixel = y * width + x;
+      const dx = Math.abs(gray[pixel - 1] - gray[pixel + 1]);
+      const dy = Math.abs(gray[pixel - width] - gray[pixel + width]);
+      const edge = dx + dy;
+      signature += gray[pixel] > average ? 1 : -1;
+
+      if (edge > 54) {
+        edgePixels++;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  const boxWidth = maxX - minX;
+  const boxHeight = maxY - minY;
+  const boxArea = boxWidth * boxHeight;
+  const frameArea = width * height;
+  const fill = boxArea / frameArea;
+  const aspect = boxWidth && boxHeight ? Math.max(boxWidth, boxHeight) / Math.min(boxWidth, boxHeight) : 0;
+  const edgeDensity = edgePixels / ((width / 2) * (height / 2));
+
+  return {
+    found: fill > 0.18 && fill < 0.82 && aspect > 1.15 && aspect < 2.15 && edgeDensity > 0.045,
+    signature: signature / 100,
+  };
+}
+
+async function estimateCondition(dataUrl) {
+  const image = await loadImage(dataUrl);
+  const canvas = elements.canvas;
+  const width = 420;
+  const height = Math.round((image.height / image.width) * width);
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, 0, 0, width, height);
+  const imageData = context.getImageData(0, 0, width, height);
+  const edgeScore = scoreEdges(imageData, width, height);
+  const centeringScore = scoreCentering(imageData, width, height);
+  const surfaceScore = Math.max(4, Math.min(9, Math.round((edgeScore + centeringScore) / 2)));
+  return {
+    corners: edgeScore,
+    edges: edgeScore,
+    surface: surfaceScore,
+    centering: centeringScore,
+  };
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function scoreEdges(imageData, width, height) {
+  const data = imageData.data;
+  let brightPixels = 0;
+  let checked = 0;
+  const margin = Math.max(8, Math.round(width * 0.04));
+
+  for (let y = 0; y < height; y += 3) {
+    for (let x = 0; x < width; x += 3) {
+      const nearEdge = x < margin || x > width - margin || y < margin || y > height - margin;
+      if (!nearEdge) continue;
+      const index = (y * width + x) * 4;
+      const brightness = (data[index] + data[index + 1] + data[index + 2]) / 3;
+      if (brightness > 220) brightPixels++;
+      checked++;
+    }
+  }
+
+  const whiteRatio = brightPixels / Math.max(1, checked);
+  return Math.max(4, Math.min(10, Math.round(10 - whiteRatio * 14)));
+}
+
+function scoreCentering(imageData, width, height) {
+  const data = imageData.data;
+  const midY = Math.floor(height / 2);
+  const scan = [];
+
+  for (let x = 0; x < width; x++) {
+    const index = (midY * width + x) * 4;
+    scan.push((data[index] + data[index + 1] + data[index + 2]) / 3);
+  }
+
+  const threshold = 205;
+  const left = scan.findIndex((value) => value < threshold);
+  const rightFromEnd = [...scan].reverse().findIndex((value) => value < threshold);
+  if (left < 0 || rightFromEnd < 0) return 7;
+  const right = width - rightFromEnd - 1;
+  const leftBorder = left;
+  const rightBorder = width - right;
+  const ratio = Math.min(leftBorder, rightBorder) / Math.max(leftBorder, rightBorder, 1);
+  return Math.max(5, Math.min(10, Math.round(6 + ratio * 4)));
+}
+
+function applyCondition(condition) {
+  $("cornersRange").value = condition.corners;
+  $("edgesRange").value = condition.edges;
+  $("surfaceRange").value = condition.surface;
+  $("centeringRange").value = condition.centering;
+  updateGradeFromSliders();
+}
+
+function updateGradeFromSliders() {
+  const values = ["cornersRange", "edgesRange", "surfaceRange", "centeringRange"].map((id) => Number($(id).value));
+  const grade = Math.max(1, Math.min(10, Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)));
+  elements.gradeEstimate.textContent = `PSA ${grade}?`;
+  elements.gradeTitle.textContent = `Estimated PSA-style grade: ${grade}`;
+  elements.gradeNotes.textContent = grade >= 9
+    ? "Looks strong from the photo. Inspect with angled light for scratches, dents, whitening, and print lines before assuming gem potential."
+    : grade >= 7
+      ? "Likely collector-grade condition. Small edge, surface, or centering issues may hold it below gem mint."
+      : "Visible wear likely affects grade and value. For valuable cards, compare against PSA standards before submitting.";
+  updateRating();
+}
+
+function getLikelyQuery(text) {
+  const collector = text.match(/\b(?:[A-Z]{1,4})?\s?(\d{1,3})\s?\/\s?(\d{1,3})\b/);
+  const cleanWords = text
+    .split(/[^A-Za-z0-9' -]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 2 && !/^(stage|basic|evolves|weakness|resistance|retreat|illus)$/i.test(part));
+  const name = cleanWords[0] || "";
+  return collector ? `${name} ${collector[1]}/${collector[2]}`.trim() : name;
+}
+
+async function searchCards(query) {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return;
+
+  setStatus("Searching Pokemon TCG API...");
+  elements.results.innerHTML = "";
+
+  const terms = cleanQuery
+    .replace(/[^\w\s/'-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const collector = cleanQuery.match(/(\d{1,3})\s?\/\s?(\d{1,3})/);
+  const nameTerms = terms.filter((term) => !/^\d{1,3}$/.test(term)).slice(0, 4);
+  const queryParts = [];
+
+  if (nameTerms.length) queryParts.push(`name:"${nameTerms.join(" ")}*"`);
+  if (collector) queryParts.push(`number:${collector[1]}`);
+  const apiQuery = queryParts.length ? queryParts.join(" ") : `name:"${cleanQuery}*"`;
+
+  try {
+    const response = await fetch(`${API_BASE}?q=${encodeURIComponent(apiQuery)}&pageSize=12&orderBy=-set.releaseDate`);
+    if (!response.ok) throw new Error("Search failed");
+    const payload = await response.json();
+    renderResults(payload.data || []);
+  } catch {
+    elements.results.innerHTML = '<div class="grade-card"><h2>Search failed</h2><p>Check your connection or try a simpler name like "Charizard".</p></div>';
+  }
+}
+
+function renderResults(cards) {
+  if (!cards.length) {
+    elements.results.innerHTML = '<div class="grade-card"><h2>No cards found</h2><p>Try the Pokemon name plus collector number, like "Pikachu 25".</p></div>';
+    return;
+  }
+
+  elements.results.innerHTML = cards.map((card, index) => {
+    const price = getMarketPrice(card);
+    return `
+      <article class="result-card">
+        <img src="${card.images?.small || ""}" alt="${card.name}" loading="lazy" />
+        <div>
+          <h2>${card.name}</h2>
+          <div class="meta">${card.set?.name || "Unknown set"} &middot; #${card.number || "-"} &middot; ${card.rarity || "Unknown rarity"}</div>
+          <div class="prices">${formatPrices(card)}</div>
+          <button class="select-card" data-card-index="${index}" type="button">Select</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  document.querySelectorAll("[data-card-index]").forEach((button) => {
+    button.addEventListener("click", () => selectCard(cards[Number(button.dataset.cardIndex)]));
+  });
+
+  selectCard(cards.find((card) => getMarketPrice(card)) || cards[0]);
+}
+
+function selectCard(card) {
+  state.selectedCard = card;
+  elements.rawValue.textContent = formatMoney(getMarketPrice(card));
+  updateRating();
+}
+
+function getMarketPrice(card) {
+  const prices = card.tcgplayer?.prices || {};
+  const variants = Object.values(prices);
+  const market = variants.map((variant) => variant.market || variant.mid || variant.low).filter(Boolean);
+  return market.length ? Math.max(...market) : null;
+}
+
+function formatPrices(card) {
+  const parts = [];
+  const prices = card.tcgplayer?.prices || {};
+  Object.entries(prices).forEach(([variant, values]) => {
+    const market = values.market || values.mid || values.low;
+    if (market) parts.push(`${labelVariant(variant)} ${formatMoney(market)}`);
+  });
+  if (card.cardmarket?.prices?.averageSellPrice) {
+    parts.push(`Cardmarket avg ${formatMoney(card.cardmarket.prices.averageSellPrice, "EUR")}`);
+  }
+  return parts.length ? parts.join("<br />") : "No live price on Pokemon TCG API";
+}
+
+function labelVariant(value) {
+  return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function formatMoney(value, currency = "USD") {
+  if (!value) return "-";
+  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value);
+}
+
+function updateRating() {
+  const price = state.selectedCard ? getMarketPrice(state.selectedCard) || 0 : 0;
+  const gradeText = elements.gradeEstimate.textContent.match(/\d+/)?.[0];
+  const grade = gradeText ? Number(gradeText) : 0;
+  const rarity = state.selectedCard?.rarity || "";
+  let score = Math.min(50, Math.round(price / 3));
+  score += grade * 4;
+  if (/rare|secret|illustration|hyper|ultra/i.test(rarity)) score += 10;
+  elements.ratingValue.textContent = state.selectedCard ? `${Math.min(100, score)}/100` : "-";
+}
+
+function setStatus(message) {
+  elements.scanText.textContent = message;
+}
