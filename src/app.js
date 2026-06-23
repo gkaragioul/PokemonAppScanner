@@ -500,12 +500,12 @@ async function searchCards(query) {
 
   if (!navigator.onLine) {
     elements.results.innerHTML = '<div class="grade-card"><h2>You are offline</h2><p>Card search requires an internet connection. Come back when you are online.</p></div>';
-    setStatus("Offline — search unavailable.");
+    setStatus("Offline - search unavailable.");
     return;
   }
 
   setStatus("Searching Pokemon TCG API...");
-  elements.results.innerHTML = '<div class="grade-card"><p>Searching…</p></div>';
+  elements.results.innerHTML = '<div class="grade-card"><p>Searching...</p></div>';
 
   try {
     const searchPlan = buildSearchPlan(cleanQuery);

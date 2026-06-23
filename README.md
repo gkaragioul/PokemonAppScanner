@@ -45,10 +45,10 @@ After the first visit (service worker installs cached assets):
 
 ## What requires network
 
-- **Card search** (Pokemon TCG API) — fails with an offline message.
-- **OCR via Tesseract.js** (CDN‑loaded) — fails gracefully with a note to use manual search.
-- **Card images** — the API returns image URLs; they only load online.
-- **Camera auto‑scan** heuristics run offline, but image capture needs no network.
+- **Card search** (Pokemon TCG API) - fails with an offline message.
+- **OCR via Tesseract.js** (CDN-loaded) - fails gracefully with a note to use manual search.
+- **Card images** - the API returns image URLs; they only load online.
+- **Camera auto-scan** heuristics run offline, but image capture needs no network.
 
 If you go offline, a red "Offline" badge appears in the scan ribbon.
 

@@ -1,4 +1,4 @@
-# Card Scout — QA checklist
+# Card Scout - QA checklist
 
 Run from the project root:
 
@@ -13,7 +13,7 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 ## 1. App loads
 
 - [ ] Page title reads **"Card Scout"**.
-- [ ] Pokéball logo, heading, camera preview, and search input are visible.
+- [ ] Pokeball logo, heading, camera preview, and search input are visible.
 - [ ] Console has **zero 404s** for local assets (`styles.css`, `src/app.js`, `assets/icon.svg`, `manifest.webmanifest`, `favicon.ico`).
 - [ ] Scanner scan-line animation plays in the preview box.
 
@@ -33,8 +33,8 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 
 ## 3. Search edge cases
 
-- [ ] Search button does not leave a stale *"Searching Pokemon TCG API…"* status.
-- [ ] Click **Select** on a result card — the card gets a teal border highlight.
+- [ ] Search button does not leave a stale *"Searching Pokemon TCG API..."* status.
+- [ ] Click **Select** on a result card - the card gets a teal border highlight.
 - [ ] Grading sliders update the **Likely grade** and **Rating** in the status strip.
 - [ ] **PSA cert** button with a number opens `https://www.psacard.com/cert/<number>`.
 - [ ] **PSA cert** button empty opens `https://www.psacard.com/cert/`.
@@ -48,10 +48,10 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 - [ ] Service worker registered (`Application > Service Workers` in DevTools).
 - [ ] **Install button** appears in the top bar (Chrome prompts may also fire on desktop).
 - [ ] Service worker cache contains `src/app.js`, `src/card-search.js`, `src/image-processing.js`, and `src/value-providers.js`.
-- [ ] Disable browser HTTP cache (`Network > Disable cache`), reload — app shell still renders with full CSS and JS.
-- [ ] Go offline (DevTools `Network > Offline`), reload — the styled shell loads; a red "Offline" badge appears in the scan ribbon.
+- [ ] Disable browser HTTP cache (`Network > Disable cache`), reload - app shell still renders with full CSS and JS.
+- [ ] Go offline (DevTools `Network > Offline`), reload - the styled shell loads; a red "Offline" badge appears in the scan ribbon.
 - [ ] While offline, search shows *"You are offline"* message.
-- [ ] Go back online — status message updates.
+- [ ] Go back online - status message updates.
 
 ## 6. Camera / OCR
 
@@ -71,7 +71,7 @@ Open `http://localhost:4173` in Chrome or Edge Dev (supports PWAs).
 
 ## 8. Grading tab
 
-- [ ] Sliders adjust corners (1–10), edges, surface, centering.
+- [ ] Sliders adjust corners (1-10), edges, surface, centering.
 - [ ] Estimated grade text updates in real time.
 - [ ] Grade description text changes at thresholds (9+, 7+, below 7).
 
@@ -98,14 +98,14 @@ if (-not (Test-Path "assets/icon.svg")) { "MISSING assets/icon.svg" }
 
 # Verify no ?v=N query strings in index.html
 $html = Get-Content "index.html" -Raw
-if ($html -match '\?v=\d+') { "WARNING: versioned asset URL found in index.html" } else { "No versioned URLs — OK" }
+if ($html -match '\?v=\d+') { "WARNING: versioned asset URL found in index.html" } else { "No versioned URLs - OK" }
 
 # Verify SW caches unversioned paths
 $sw = Get-Content "sw.js" -Raw
-if ($sw -match '\?v=') { "WARNING: versioned path in sw.js" } else { "SW uses clean paths — OK" }
+if ($sw -match '\?v=') { "WARNING: versioned path in sw.js" } else { "SW uses clean paths - OK" }
 
 # Verify CACHE_NAME is not v4
-if ($sw -match "card-scout-v4") { "WARNING: old CACHE_NAME" } else { "CACHE_NAME updated — OK" }
+if ($sw -match "card-scout-v4") { "WARNING: old CACHE_NAME" } else { "CACHE_NAME updated - OK" }
 ```
 
 ## Automated helper tests

@@ -29,7 +29,7 @@ test("formatPrices includes TCGplayer and Cardmarket values", () => {
 
   assert.equal(
     formatPrices(card),
-    "Reverse Holofoil $9.50<br />Cardmarket avg €4.25",
+    "Reverse Holofoil $9.50<br />Cardmarket avg \u20ac4.25",
   );
 });
 

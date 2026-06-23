@@ -14,8 +14,8 @@ const BOILERPLATE_WORDS = new Set([
 
 export function normalizeSearchText(value) {
   return String(value || "")
-    .replace(/[“”]/g, '"')
-    .replace(/[’]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2019]/g, "'")
     .replace(/[^\p{L}\p{N}/'&.\-\s]/gu, " ")
     .replace(/\s*\/\s*/g, "/")
     .replace(/\s+/g, " ")
