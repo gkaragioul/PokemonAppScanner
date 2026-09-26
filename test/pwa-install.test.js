@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const manifest = JSON.parse(readFileSync(new URL("../manifest.webmanifest", import.meta.url), "utf8"));
-const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+// Normalize line endings so the checks also pass on Windows checkouts (core.autocrlf).
+const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 test("iOS home screen metadata points at a PNG touch icon", () => {
   assert.match(html, /apple-mobile-web-app-capable" content="yes"/);
