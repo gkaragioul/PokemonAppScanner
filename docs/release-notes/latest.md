@@ -1,7 +1,6 @@
 # Latest Release Notes
 
 Date: 2026-06-23
-Branch: `feat/m06-production-readiness`
 
 ## Summary
 

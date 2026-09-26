@@ -61,7 +61,7 @@ Decision: `found = fill > 0.18 && fill < 0.82 && aspect > 1.15 && aspect < 2.15 
 
 **Module:** `app.js` → `analyzeImage()` + `card-search.js` → `getLikelyQueryFromOcr()`
 
-- Uses Tesseract.js v5 loaded from `cdn.jsdelivr.net`.
+- Uses Tesseract.js 5.1.1 loaded from `cdn.jsdelivr.net`, pinned to an exact version with a Subresource Integrity hash.
 - Runs on the full preprocessed image (no region targeting).
 - Raw OCR text is shown in the UI as-is.
 - `getLikelyQueryFromOcr()` cleans the text:
@@ -190,7 +190,7 @@ Opens `https://www.psacard.com/cert/<certNumber>` in new tab. Empty cert input o
 
 | Source | Purpose | URL |
 |--------|---------|-----|
-| Tesseract.js v5 | In-browser OCR | `cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js` |
+| Tesseract.js v5 | In-browser OCR | `cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js` (SRI sha384) |
 | Pokemon TCG API v2 | Card data, images, prices | `api.pokemontcg.io/v2/cards` |
 | PSA cert lookup | Open cert page | `psacard.com/cert/<number>` |
 | Railway hosting | Live PWA deployment | `<your-app>.up.railway.app` |
