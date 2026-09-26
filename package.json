@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "description": "Mobile-first Pokemon card scanner, value lookup, and PSA helper PWA.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "test": "node --test",

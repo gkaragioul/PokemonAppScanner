@@ -19,7 +19,7 @@ is granted.
 
 ## Environment Variables
 
-No variables are required for the current private app. Do not add paid API tokens
+No variables are required for the current app. Do not add paid API tokens
 to browser JavaScript. Future paid value sources need a backend/proxy first.
 
 ## Verification Checklist

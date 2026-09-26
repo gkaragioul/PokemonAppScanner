@@ -1,6 +1,6 @@
 # Research Sources
 
-This project is a private family app. Even so, keep source use boring and clean:
+This project is a small open-source app. Keep source use boring and clean:
 document what we read, avoid copying GPL code, never commit secrets, and do not
 vendor large datasets unless there is a clear reason.
 
@@ -17,7 +17,7 @@ vendor large datasets unless there is a clear reason.
 
 ## Decision
 
-For the private app, use live Pokemon TCG API data first. Keep heavyweight
+For the current app, use live Pokemon TCG API data first. Keep heavyweight
 recognition models and full datasets out of Git. If recognition accuracy needs a
 major jump later, add a backend milestone with explicit licensing and hosting
 cost review.

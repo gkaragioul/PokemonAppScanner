@@ -1,6 +1,6 @@
 # Security Policy
 
-Card Scout is a private family PWA with no backend, database, or user accounts.
+Card Scout is a static PWA with no backend, database, or user accounts.
 
 ## No Secrets In Client Code
 
@@ -20,15 +20,19 @@ a server-side endpoint so the token is never exposed to the browser.
 - External data sources (Pokemon TCG API, PSA public cert lookup, TCGdex) are
   used as read-only APIs over HTTPS. No data is vendored from GPL sources.
 
-## Responsible Disclosure
+## Reporting a Vulnerability
 
-This is a private project with no public attack surface beyond the static files
-served by Railway. If you discover a vulnerability in the app or its dependencies:
+The app has no attack surface beyond the static files served by its host (for
+example Railway) and the local development server in `tools/static-server.js`.
+If you discover a vulnerability in the app or its dependencies:
 
-- Contact: George Karangioules (in-progress: add email or GitHub handle)
-- Do not file public issues for security bugs.
+- Report it privately through GitHub's private vulnerability reporting
+  (the repository's **Security** tab, then **Report a vulnerability**) when that
+  option is available.
+- Otherwise open a GitHub issue that describes the problem in general terms,
+  without exploit details, and ask for a private follow-up.
 
-## Reporting
+## Fixes
 
 Security patches follow the normal branch-and-review workflow. Critical fixes
 may skip milestone review with explicit approval.

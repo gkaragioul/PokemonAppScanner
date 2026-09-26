@@ -1,6 +1,6 @@
 # Value Sources
 
-Card Scout shows informational raw value estimates for a private collection
+Card Scout shows informational raw value estimates for a personal collection
 helper. It is not an appraisal tool and does not produce official PSA grades.
 
 ## Current Source

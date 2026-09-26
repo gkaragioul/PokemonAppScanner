@@ -5,7 +5,7 @@ Branch: `feat/m06-production-readiness`
 
 ## Summary
 
-Prepared Card Scout as a private, phone-accessible Railway PWA for scanning
+Prepared Card Scout as a phone-accessible Railway PWA for scanning
 Pokemon cards with camera/upload, OCR-assisted search, raw value estimates, and
 PSA lookup.
 
@@ -18,7 +18,7 @@ PSA lookup.
 - Added phone scanning improvements: Retake, upload status, resize/contrast
   preprocessing, and responsive toolbar wrapping.
 - Hardened service worker cache for split JavaScript modules.
-- Added private security and release checklist docs.
+- Added security and release checklist docs.
 
 ## Verification Run
 
